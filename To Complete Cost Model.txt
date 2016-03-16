@@ -1,0 +1,53 @@
+--job to date costs calculated from rollup of transactions table
+	AP Cost=calculate(sum(_BMI_JTD_TX_TOTALS[AP_Cost]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	EQ Cost=calculate(sum(_BMI_JTD_TX_TOTALS[EQ_Cost]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	IV Cost=calculate(sum(_BMI_JTD_TX_TOTALS[IV_Cost]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	JC Cost=calculate(sum(_BMI_JTD_TX_TOTALS[JC_Cost]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	PR Cost=calculate(sum(_BMI_JTD_TX_TOTALS[PR_Cost]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+
+--Total Cost (Job to Date)
+	Tot Cost = [AP Cost] + [EQ Cost] + [IV Cost] + [JC Cost] + [PR Cost]
+
+--Non Labor Cost
+	NonLabor Cost = [Tot Cost] - [PR Cost]
+
+--Labor Hours (note, field lives in the PRCOST_Current view, and is the rollup of Units where Transaction_Type='PR Cost')
+	Actual Labor Hours=calculate(sum(_JCT_LATEST_PRCOST_CURRENT[PR_Cost_Hours]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+
+--Average Labor Rate
+	Labor Rate = [PR Cost]/[Actual Labor Hours]
+
+--Total Project Hours AT Complete (note, stored in the Est_labor_hours_to_Complete field [sic])
+	Labor Hours At Complete=calculate(sum(JCM_MASTER__JOB[Lab_Hrs_To_Comp]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+
+--Labor hours TO complete
+	Labor Hours To Complete = [Labor Hours At Complete] - [Actual Labor Hours]
+
+--Labor Cost TO and AT Complete
+	PR Cost To Complete = [Labor Hours To Complete] * [Labor Rate]
+	PR Cost At Complete = [PR Cost To Complete] + [PR Cost]
+
+--Non Labor Cost TO and AT Complete
+	--Captured in the COntract Updater Spreadsheet in the columns for Remaining To Commit (AP Only)
+	--which get stuffed into the Master Job Record in Msc_Job_Amt_3
+	NonLabor Cost To Complete=calculate(sum(JCM_MASTER__JOB[Msc_Job_Amt_3]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+
+	--need to calculate the commitment balance from fields in the Master Job Record
+	--commitment balance = revised commitment - commitment invoiced (these fields in the Job Master table)
+	Revised Commitment = calculate(sum(JCM_MASTER__JOB[Revised_Commitment]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	Commitment Invoiced = calculate(sum(JCM_MASTER__JOB[Commitment_Invoiced]),filter('QXM_MASTER__SECURITYUSER', 'QXM_MASTER__SECURITYUSER'[SecurityUserId] = [Security GUID])) 
+	Commitment Balance = [Revised Commitment] - [Commitment Invoiced]
+	
+	NonLabor Cost At Complete = [NonLabor Cost To Complete] + [Commitment Balance] + [NonLabor Cost]
+
+--Total Job Cost TO and AT Complete
+	Tot Cost To Complete = [PR Cost To Complete] + [NonLabor Cost To Complete]
+	Tot Cost At Complete = [PR Cost At Complete] + [NonLabor Cost At Complete]
+
+--% Completes
+	Labor % Complete = [Actual Labor Hours]/[Labor Hours At Complete]
+	Cost % Complete = [Tot Cost]/[Tot Cost At Complete]
+
+--Job Margin %
+	Current Margin % = ([Current Contract Amount] - [Tot Cost At Complete])/[Current Contract Amount]
+	Prospective Margin % = ([Prospective Contract Amount] - [Tot Cost At Complete])/[Prospective Contract Amount]
